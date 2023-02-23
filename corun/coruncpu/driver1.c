@@ -4,10 +4,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
-#define ERT_FLOP            64
+#define ERT_FLOP            2
 #define ERT_TRIALS_MIN      1
 #define ERT_WORKING_SET_MIN 1
 #define GBUNIT              (1024 * 1024 * 1024)
+#define FP64                0 // 1 for double, 0 for float
 
 #define REP2(S)                                                                                    \
     S;                                                                                             \
@@ -40,24 +41,40 @@
 #define KERNEL1(a, b, c) ((a) = (a) * (b))
 #define KERNEL2(a, b, c) ((a) = (a) * (b) + c)
 
-void initialize(uint64_t nsize, double* __restrict__ A, double value) {
+void initialize(uint64_t nsize, void* __restrict__ _A, double value) {
+#if FP64
+    double* __restrict__ A = (double*)_A;
+#else
+    float* __restrict__ A = (float*)_A;
+#endif
     uint64_t i;
     for (i = 0; i < nsize; ++i) {
         A[i] = value;
     }
 }
 
-void kernel(uint64_t nsize, uint64_t ntrials, double* __restrict__ A, int* bytes_per_elem,
+void kernel(uint64_t nsize, uint64_t ntrials, void* __restrict__ _A, int* bytes_per_elem,
             int* mem_accesses_per_elem) {
+#if FP64
+    double* __restrict__ A = (double*)_A;
+    double alpha = 0.5;
+#else
+    float* __restrict__ A = (float*)_A;
+    float alpha = 0.5;
+#endif
+
     *bytes_per_elem = sizeof(*A);
     *mem_accesses_per_elem = 2;
 
-    double alpha = 0.5;
     uint64_t i, j;
     for (j = 0; j < ntrials; ++j) {
 #pragma unroll(8)
         for (i = 0; i < nsize; ++i) {
+#if FP64
             double beta = 0.8;
+#else
+            float beta = 0.8;
+#endif
 
 #if ((ERT_FLOP & 1) == 1) /* add 1 flop */
             KERNEL1(beta, A[i], alpha);
@@ -114,7 +131,11 @@ int main(int argc, char* argv[]) {
     uint64_t TSIZE = 1 << 30;
     uint64_t PSIZE = TSIZE / nprocs;
 
+#if FP64
     double* buf = (double*)malloc(PSIZE);
+#else
+    float* buf = (float*)malloc(PSIZE);
+#endif
 
     if (buf == NULL) {
         fprintf(stderr, "Out of memory!\n");
@@ -127,7 +148,11 @@ int main(int argc, char* argv[]) {
 
         uint64_t nsize = PSIZE / nthreads;
         nsize = nsize & (~(64 - 1));
+#if FP64
         nsize = nsize / sizeof(double);
+#else
+        nsize = nsize / sizeof(float);
+#endif
         uint64_t nid = nsize * id;
 
         // initialize small chunck of buffer within each thread

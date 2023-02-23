@@ -6,7 +6,7 @@
 #include <sys/time.h>
 
 // helper functions and utilities to work with CUDA
-#define ERT_FLOP            1
+#define ERT_FLOP            2
 #define ERT_TRIALS_MIN      1
 #define ERT_WORKING_SET_MIN 1
 #define GBUNIT              (1024 * 1024 * 1024)
