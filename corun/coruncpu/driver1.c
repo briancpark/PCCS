@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
-#define ERT_FLOP            2
+#define ERT_FLOP            64
 #define ERT_TRIALS_MIN      1
 #define ERT_WORKING_SET_MIN 1
 #define GBUNIT              (1024 * 1024 * 1024)
@@ -163,9 +163,12 @@ int main(int argc, char* argv[]) {
                     uint64_t total_bytes =
                         t * working_set_size * bytes_per_elem * mem_accesses_per_elem;
                     uint64_t total_flops = t * working_set_size * ERT_FLOP;
-                    // nsize; trials; microseconds; bytes; single thread bandwidth; total bandwidth
-                    printf("%12" PRIu64 " %12" PRIu64 " %15.3lf %12" PRIu64 " %12" PRIu64 "\n",
-                           working_set_size * bytes_per_elem, t, seconds, total_bytes, total_flops);
+                    // nsize; trials; microseconds; bytes; single thread bandwidth; total bandwidth;
+                    // GFLOPS
+                    printf("%12" PRIu64 " %12" PRIu64 " %15.3lf %12" PRIu64 " %12" PRIu64
+                           "%15.3lf\n",
+                           working_set_size * bytes_per_elem, t, seconds, total_bytes, total_flops,
+                           total_flops / seconds / 1e9);
                     printf("BW: %15.3lf\n", total_bytes * 1.0 / seconds / 1024 / 1024 / 1024);
                 } // print
             }     // working set - ntrials
