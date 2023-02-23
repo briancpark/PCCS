@@ -4,12 +4,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
-#define ERT_FLOP            64
+// #define ERT_FLOP            1
 #define ERT_TRIALS_MIN      1
 #define ERT_WORKING_SET_MIN 1
 #define GBUNIT              (1024 * 1024 * 1024)
-#define FP64                0 // 1 for double, 0 for float
-#define NUM_THREADS         8
+// #define FP64                1
+// #define FP32                0
+
+// Usage:
+// make clean && make CFLAGS="-DERT_FLOP=64 -DFP32" && ./main
+
+#define NUM_THREADS 8
 
 #define REP2(S)                                                                                    \
     S;                                                                                             \
@@ -42,11 +47,12 @@
 #define KERNEL1(a, b, c) ((a) = (a) * (b))
 #define KERNEL2(a, b, c) ((a) = (a) * (b) + c)
 
-void initialize(uint64_t nsize, void* __restrict__ _A, double value) {
 #if FP64
-    double* __restrict__ A = (double*)_A;
-#else
-    float* __restrict__ A = (float*)_A;
+void initialize(uint64_t nsize, double* __restrict__ A, double value) {
+#elif FP32
+void initialize(uint64_t nsize, float* __restrict__ A, float value) {
+#elif FP16
+void initialize(uint64_t nsize, __fp16* __restrict__ A, float value) {
 #endif
     uint64_t i;
     for (i = 0; i < nsize; ++i) {
@@ -54,14 +60,18 @@ void initialize(uint64_t nsize, void* __restrict__ _A, double value) {
     }
 }
 
-void kernel(uint64_t nsize, uint64_t ntrials, void* __restrict__ _A, int* bytes_per_elem,
-            int* mem_accesses_per_elem) {
 #if FP64
-    double* __restrict__ A = (double*)_A;
+void kernel(uint64_t nsize, uint64_t ntrials, double* __restrict__ A, int* bytes_per_elem,
+            int* mem_accesses_per_elem) {
     double alpha = 0.5;
-#else
-    float* __restrict__ A = (float*)_A;
+#elif FP32
+void kernel(uint64_t nsize, uint64_t ntrials, float* __restrict__ A, int* bytes_per_elem,
+            int* mem_accesses_per_elem) {
     float alpha = 0.5;
+#elif FP16
+void kernel(uint64_t nsize, uint64_t ntrials, __fp16* __restrict__ A, int* bytes_per_elem,
+            int* mem_accesses_per_elem) {
+    __fp16 alpha = 0.5;
 #endif
 
     *bytes_per_elem = sizeof(*A);
@@ -73,8 +83,10 @@ void kernel(uint64_t nsize, uint64_t ntrials, void* __restrict__ _A, int* bytes_
         for (i = 0; i < nsize; ++i) {
 #if FP64
             double beta = 0.8;
-#else
+#elif FP32
             float beta = 0.8;
+#elif FP16
+            __fp16 beta = 0.8;
 #endif
 
 #if ((ERT_FLOP & 1) == 1) /* add 1 flop */
@@ -134,8 +146,10 @@ int main(int argc, char* argv[]) {
 
 #if FP64
     double* buf = (double*)malloc(PSIZE);
-#else
+#elif FP32
     float* buf = (float*)malloc(PSIZE);
+#elif FP16
+    __fp16* buf = (__fp16*)malloc(PSIZE);
 #endif
     printf("nsize,trials,microseconds,bytes,single_thread_bandwidth,total_bandwidth,GFLOPS,"
            "bandwidth(GB/s)\n");
@@ -152,8 +166,10 @@ int main(int argc, char* argv[]) {
         nsize = nsize & (~(64 - 1));
 #if FP64
         nsize = nsize / sizeof(double);
-#else
+#elif FP32
         nsize = nsize / sizeof(float);
+#elif FP16
+        nsize = nsize / sizeof(__fp16);
 #endif
         uint64_t nid = nsize * id;
 
