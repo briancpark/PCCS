@@ -137,7 +137,8 @@ int main(int argc, char* argv[]) {
 #else
     float* buf = (float*)malloc(PSIZE);
 #endif
-
+    printf("nsize,trials,microseconds,bytes,single_thread_bandwidth,total_bandwidth,GFLOPS,"
+           "bandwidth(GB/s)\n");
     if (buf == NULL) {
         fprintf(stderr, "Out of memory!\n");
         return -1;
@@ -190,14 +191,12 @@ int main(int argc, char* argv[]) {
                         t * working_set_size * bytes_per_elem * mem_accesses_per_elem;
                     uint64_t total_flops = t * working_set_size * ERT_FLOP;
                     // nsize; trials; microseconds; bytes; single thread bandwidth; total bandwidth;
-                    // GFLOPS
-                    printf("%12" PRIu64 " %12" PRIu64 " %15.3lf %12" PRIu64 " %12" PRIu64
-                           "%15.3lf\n",
-                           working_set_size * bytes_per_elem, t, seconds, total_bytes, total_flops,
-                           total_flops / seconds / 1e9);
-                    printf("BW: %15.3lf\n", total_bytes * 1.0 / seconds / 1024 / 1024 / 1024);
-                } // print
-            }     // working set - ntrials
+                    // GFLOPS, Bandwidth (GB/s)
+                    printf("%lu,%lu,%3lf,%lu,%lu,%.3lf,%.3lf\n", working_set_size * bytes_per_elem,
+                           t, seconds, total_bytes, total_flops, total_flops / seconds / 1e9,
+                           total_bytes * 1.0 / seconds / 1024 / 1024 / 1024);
+                }
+            }
 
             nNew = 2 * n;
             if (nNew == n) {
