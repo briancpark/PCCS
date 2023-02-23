@@ -4,11 +4,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
-#define ERT_FLOP            2
+#define ERT_FLOP            64
 #define ERT_TRIALS_MIN      1
 #define ERT_WORKING_SET_MIN 1
 #define GBUNIT              (1024 * 1024 * 1024)
 #define FP64                0 // 1 for double, 0 for float
+#define NUM_THREADS         8
 
 #define REP2(S)                                                                                    \
     S;                                                                                             \
@@ -141,7 +142,7 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "Out of memory!\n");
         return -1;
     }
-#pragma omp parallel private(id) num_threads(7)
+#pragma omp parallel private(id) num_threads(NUM_THREADS)
     {
         id = omp_get_thread_num();
         nthreads = omp_get_num_threads();
