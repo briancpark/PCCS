@@ -1,7 +1,8 @@
 CC = gcc
+CXX = g++
 
-main : main.c
-	gcc -fopenmp main.c -o main
+main : main.cpp
+	g++ -fopenmp main.cpp -o main
 
 clean :
 	rm -f main
