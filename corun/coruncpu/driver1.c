@@ -4,12 +4,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
-// #define ERT_FLOP            1
+
 #define ERT_TRIALS_MIN      1
 #define ERT_WORKING_SET_MIN 1
 #define GBUNIT              (1024 * 1024 * 1024)
-// #define FP64                1
-// #define FP32                0
 
 // Usage:
 // make clean && make CFLAGS="-DERT_FLOP=64 -DFP32" && ./main

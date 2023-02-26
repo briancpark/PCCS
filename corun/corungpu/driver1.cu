@@ -6,13 +6,12 @@
 #include <sys/time.h>
 
 // helper functions and utilities to work with CUDA
-// #define ERT_FLOP            2
 #define ERT_TRIALS_MIN      1
 #define ERT_WORKING_SET_MIN 1
 #define GBUNIT              (1024 * 1024 * 1024)
-// #define FP64                0
-// #define FP32                0
-// #define FP16                0
+
+// Usage:
+// make clean && make CFLAGS="-DERT_FLOP=64 -DFP32" && ./main
 
 #define REP2(S)                                                                                    \
     S;                                                                                             \
@@ -213,6 +212,8 @@ int main(int argc, char* argv[]) {
 #else
     double* buf = (double*)malloc(PSIZE);
 #endif
+    printf("nsize,trials,microseconds,bytes,single_thread_bandwidth,total_bandwidth,GFLOPS,"
+           "bandwidth(GB/s)\n");
 
     if (buf == NULL) {
         fprintf(stderr, "Out of memory!\n");
