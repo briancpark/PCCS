@@ -6,10 +6,13 @@
 #include <sys/time.h>
 
 // helper functions and utilities to work with CUDA
-#define ERT_FLOP            2
+// #define ERT_FLOP            2
 #define ERT_TRIALS_MIN      1
 #define ERT_WORKING_SET_MIN 1
 #define GBUNIT              (1024 * 1024 * 1024)
+// #define FP64                0
+// #define FP32                0
+// #define FP16                0
 
 #define REP2(S)                                                                                    \
     S;                                                                                             \
@@ -41,16 +44,47 @@
 
 #define KERNEL2(a, b, c) ((a) = (a) * (b) + (c))
 #define KERNEL1(a, b, c) ((a) = (b) + (c))
-void initialize(uint64_t nsize, double* __restrict__ A, double value) {
+
+#if FP64
+void initialize(uint64_t nsize, double* __restrict__ A, double value)
+#elif FP32
+void initialize(uint64_t nsize, float* __restrict__ A, float value)
+#elif FP16
+void initialize(uint64_t nsize, __half* __restrict__ A, __half value)
+#else
+void initialize(uint64_t nsize, double* __restrict__ A, double value)
+#endif
+{
     uint64_t i;
     for (i = 0; i < nsize; ++i) {
         A[i] = value;
     }
 }
+
+#if FP64
 void gpuKernel(uint64_t nsize, uint64_t ntrials, double* __restrict__ array, int* bytes_per_elem,
                int* mem_accesses_per_elem);
+#elif FP32
+void gpuKernel(uint64_t nsize, uint64_t ntrials, float* __restrict__ array, int* bytes_per_elem,
+               int* mem_accesses_per_elem);
+#elif FP16
+void gpuKernel(uint64_t nsize, uint64_t ntrials, __half* __restrict__ array, int* bytes_per_elem,
+               int* mem_accesses_per_elem);
+#else
+void gpuKernel(uint64_t nsize, uint64_t ntrials, double* __restrict__ array, int* bytes_per_elem,
+               int* mem_accesses_per_elem);
+#endif
 
-__global__ void block_stride(uint64_t ntrials, uint64_t nsize, double* A) {
+#if FP64
+__global__ void block_stride(uint64_t ntrials, uint64_t nsize, double* A)
+#elif FP32
+__global__ void block_stride(uint64_t ntrials, uint64_t nsize, float* A)
+#elif FP16
+__global__ void block_stride(uint64_t ntrials, uint64_t nsize, __half* A)
+#else
+__global__ void block_stride(uint64_t ntrials, uint64_t nsize, double* A)
+#endif
+{
     uint64_t total_thr = gridDim.x * blockDim.x;
     uint64_t elem_per_thr = (nsize + (total_thr - 1)) / total_thr;
     uint64_t blockOffset = blockIdx.x * blockDim.x;
@@ -67,11 +101,29 @@ __global__ void block_stride(uint64_t ntrials, uint64_t nsize, double* A) {
         end_idx = nsize;
     }
 
+#if FP64
     double alpha = 0.5;
+#elif FP32
+    float alpha = 0.5;
+#elif FP16
+    __half alpha = 0.5;
+#else
+    double alpha = 0.5;
+#endif
+
     uint64_t i, j;
     for (j = 0; j < ntrials; ++j) {
         for (i = start_idx; i < end_idx; i += stride_idx) {
+#if FP64
             double beta = 0.8;
+#elif FP32
+            float beta = 0.8;
+#elif FP16
+            __half beta = 0.8;
+#else
+            double beta = 0.8;
+#endif
+
 #if ((ERT_FLOP & 1) == 1) /* add 1 flop */
             KERNEL1(beta, A[i], alpha);
 #endif
@@ -114,8 +166,20 @@ __global__ void block_stride(uint64_t ntrials, uint64_t nsize, double* A) {
 int gpu_blocks = 512;
 int gpu_threads = 512;
 
+#if FP64
 void gpuKernel(uint64_t nsize, uint64_t ntrials, double* __restrict__ A, int* bytes_per_elem,
-               int* mem_accesses_per_elem) {
+               int* mem_accesses_per_elem)
+#elif FP32
+void gpuKernel(uint64_t nsize, uint64_t ntrials, float* __restrict__ A, int* bytes_per_elem,
+               int* mem_accesses_per_elem)
+#elif FP16
+void gpuKernel(uint64_t nsize, uint64_t ntrials, __half* __restrict__ A, int* bytes_per_elem,
+               int* mem_accesses_per_elem)
+#else
+void gpuKernel(uint64_t nsize, uint64_t ntrials, double* __restrict__ A, int* bytes_per_elem,
+               int* mem_accesses_per_elem)
+#endif
+{
     *bytes_per_elem = sizeof(*A);
     *mem_accesses_per_elem = 2;
     // gpu_blocks = (nsize+1023)/1024;
@@ -140,7 +204,15 @@ int main(int argc, char* argv[]) {
     uint64_t TSIZE = 1 << 30;
     uint64_t PSIZE = TSIZE / nprocs;
 
+#if FP64
     double* buf = (double*)malloc(PSIZE);
+#elif FP32
+    float* buf = (float*)malloc(PSIZE);
+#elif FP16
+    __half* buf = (__half*)malloc(PSIZE);
+#else
+    double* buf = (double*)malloc(PSIZE);
+#endif
 
     if (buf == NULL) {
         fprintf(stderr, "Out of memory!\n");
@@ -174,15 +246,38 @@ int main(int argc, char* argv[]) {
 
         uint64_t nsize = PSIZE / nthreads;
         nsize = nsize & (~(64 - 1));
+#if FP64
         nsize = nsize / sizeof(double);
+#elif FP32
+        nsize = nsize / sizeof(float);
+#elif FP16
+        nsize = nsize / sizeof(__half);
+#else
+        nsize = nsize / sizeof(double);
+#endif
         uint64_t nid = nsize * id;
 
         // initialize small chunck of buffer within each thread
         initialize(nsize, &buf[nid], 1.0);
 
+#if FP64
         double* d_buf;
         cudaMalloc((void**)&d_buf, nsize * sizeof(double));
         cudaMemset(d_buf, 0, nsize * sizeof(double));
+#elif FP32
+        float* d_buf;
+        cudaMalloc((void**)&d_buf, nsize * sizeof(float));
+        cudaMemset(d_buf, 0, nsize * sizeof(float));
+#elif FP16
+        __half* d_buf;
+        cudaMalloc((void**)&d_buf, nsize * sizeof(__half));
+        cudaMemset(d_buf, 0, nsize * sizeof(__half));
+#else
+        double* d_buf;
+        cudaMalloc((void**)&d_buf, nsize * sizeof(double));
+        cudaMemset(d_buf, 0, nsize * sizeof(double));
+#endif
+
         cudaDeviceSynchronize();
 
         double startTime, endTime;
@@ -198,7 +293,16 @@ int main(int argc, char* argv[]) {
                 ntrials = 1;
             // 600 original
             for (t = 1; t <= 600; t = t + 1) { // working set - ntrials
+#if FP64
                 cudaMemcpy(d_buf, &buf[nid], n * sizeof(double), cudaMemcpyHostToDevice);
+#elif FP32
+                cudaMemcpy(d_buf, &buf[nid], n * sizeof(float), cudaMemcpyHostToDevice);
+#elif FP16
+                cudaMemcpy(d_buf, &buf[nid], n * sizeof(__half), cudaMemcpyHostToDevice);
+#else
+                cudaMemcpy(d_buf, &buf[nid], n * sizeof(double), cudaMemcpyHostToDevice);
+#endif
+
                 cudaDeviceSynchronize();
 
                 if ((id == 0) && (rank == 0)) {
@@ -215,15 +319,23 @@ int main(int argc, char* argv[]) {
                     uint64_t total_bytes =
                         t * working_set_size * bytes_per_elem * mem_accesses_per_elem;
                     uint64_t total_flops = t * working_set_size * ERT_FLOP;
-                    printf("thread: %d\n", nthreads);
+                    // printf("thread: %d\n", nthreads);
                     // nsize; trials; microseconds; bytes; single thread bandwidth; total bandwidth
-                    printf("%12lld %12lld %15.3lf %12lld %12lld  %15.3lf\n",
-                           working_set_size * bytes_per_elem, t, seconds * 1000000, total_bytes,
-                           total_flops, total_flops / seconds / 1e9);
-                    printf("BW: %15.3lf\n", total_bytes * 1.0 / seconds / 1024 / 1024 / 1024);
+                    printf("%lu,%lu,%.3lf,%lu,%lu,%.3lf,%.3lf\n", working_set_size * bytes_per_elem,
+                           t, seconds * 1000000, total_bytes, total_flops,
+                           total_flops / seconds / 1e9,
+                           total_bytes * 1.0 / seconds / 1024 / 1024 / 1024);
                 } // print
 
+#if FP64
                 cudaMemcpy(&buf[nid], d_buf, n * sizeof(double), cudaMemcpyDeviceToHost);
+#elif FP32
+                cudaMemcpy(&buf[nid], d_buf, n * sizeof(float), cudaMemcpyDeviceToHost);
+#elif FP16
+                cudaMemcpy(&buf[nid], d_buf, n * sizeof(__half), cudaMemcpyDeviceToHost);
+#else
+                cudaMemcpy(&buf[nid], d_buf, n * sizeof(double), cudaMemcpyDeviceToHost);
+#endif
                 cudaDeviceSynchronize();
             } // working set - ntrials
 
