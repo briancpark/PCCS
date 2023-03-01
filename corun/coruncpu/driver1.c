@@ -155,7 +155,8 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "Out of memory!\n");
         return -1;
     }
-#pragma omp parallel private(id) num_threads(NUM_THREADS)
+    // Make sure to set OMP_NUM_THREADS=N-1 threads when corunning GPU code
+#pragma omp parallel private(id)
     {
         id = omp_get_thread_num();
         nthreads = omp_get_num_threads();

@@ -1,5 +1,7 @@
+#include <cuda_fp16.h>
 #include <cuda_runtime.h>
 #include <inttypes.h>
+#include <iostream>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -41,8 +43,13 @@
     REP256(S);                                                                                     \
     REP256(S)
 
+#ifdef FP16
+#define KERNEL2(a, b, c) ((a) = __hfma((b), (c), (a)))
+#define KERNEL1(a, b, c) ((a) = __hadd((b), (c)))
+#else
 #define KERNEL2(a, b, c) ((a) = (a) * (b) + (c))
 #define KERNEL1(a, b, c) ((a) = (b) + (c))
+#endif
 
 #if FP64
 void initialize(uint64_t nsize, double* __restrict__ A, double value)
@@ -159,7 +166,11 @@ __global__ void block_stride(uint64_t ntrials, uint64_t nsize, double* A)
 
             A[i] = beta;
         }
+#if FP16
+        alpha = __hmul(alpha, 1e-8);
+#else
         alpha = alpha * (1 - 1e-8);
+#endif
     }
 }
 int gpu_blocks = 512;
@@ -195,10 +206,8 @@ double getTime() {
 
 int main(int argc, char* argv[]) {
 
-    int rank = 0;
     int nprocs = 1;
     int nthreads = 1;
-    int id = 0;
 
     uint64_t TSIZE = 1 << 30;
     uint64_t PSIZE = TSIZE / nprocs;
@@ -221,7 +230,6 @@ int main(int argc, char* argv[]) {
     }
 
     {
-        id = 0;
         nthreads = 1;
 
         int num_gpus = 0;
@@ -241,7 +249,7 @@ int main(int argc, char* argv[]) {
             /* printf("%d: %s\n",gpu,dprop.name); */
         }
 
-        cudaSetDevice(id % num_gpus);
+        cudaSetDevice(0);
         cudaGetDevice(&gpu_id);
         cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, gpu_id);
 
@@ -256,7 +264,7 @@ int main(int argc, char* argv[]) {
 #else
         nsize = nsize / sizeof(double);
 #endif
-        uint64_t nid = nsize * id;
+        uint64_t nid = nsize * 0;
 
         // initialize small chunck of buffer within each thread
         initialize(nsize, &buf[nid], 1.0);
@@ -281,11 +289,14 @@ int main(int argc, char* argv[]) {
 
         cudaDeviceSynchronize();
 
-        double startTime, endTime;
         uint64_t n, nNew;
         uint64_t t;
         int bytes_per_elem;
         int mem_accesses_per_elem;
+        float milliseconds = 0;
+        cudaEvent_t start, stop;
+        cudaEventCreate(&start);
+        cudaEventCreate(&stop);
 
         n = 1 << 22;
         while (n <= nsize) { // working set - nsize
@@ -304,29 +315,26 @@ int main(int argc, char* argv[]) {
                 cudaMemcpy(d_buf, &buf[nid], n * sizeof(double), cudaMemcpyHostToDevice);
 #endif
 
-                cudaDeviceSynchronize();
-
-                if ((id == 0) && (rank == 0)) {
-                    startTime = getTime();
-                }
+                cudaEventSynchronize(start);
+                cudaEventRecord(start);
 
                 gpuKernel(n, t, d_buf, &bytes_per_elem, &mem_accesses_per_elem);
-                cudaDeviceSynchronize();
 
-                if ((id == 0) && (rank == 0)) {
-                    endTime = getTime();
-                    double seconds = (double)(endTime - startTime);
-                    uint64_t working_set_size = n * nthreads * nprocs;
-                    uint64_t total_bytes =
-                        t * working_set_size * bytes_per_elem * mem_accesses_per_elem;
-                    uint64_t total_flops = t * working_set_size * ERT_FLOP;
-                    // printf("thread: %d\n", nthreads);
-                    // nsize; trials; microseconds; bytes; single thread bandwidth; total bandwidth
-                    printf("%lu,%lu,%.3lf,%lu,%lu,%.3lf,%.3lf\n", working_set_size * bytes_per_elem,
-                           t, seconds * 1000000, total_bytes, total_flops,
-                           total_flops / seconds / 1e9,
-                           total_bytes * 1.0 / seconds / 1024 / 1024 / 1024);
-                } // print
+                cudaEventRecord(stop);
+                cudaEventSynchronize(stop);
+
+                cudaEventElapsedTime(&milliseconds, start, stop);
+
+                double seconds = (double)milliseconds / 1000.0;
+                uint64_t working_set_size = n * nthreads * nprocs;
+                uint64_t total_bytes =
+                    t * working_set_size * bytes_per_elem * mem_accesses_per_elem;
+                uint64_t total_flops = t * working_set_size * ERT_FLOP;
+                // printf("thread: %d\n", nthreads);
+                // nsize; trials; microseconds; bytes; single thread bandwidth; total bandwidth
+                printf("%lu,%lu,%.3lf,%lu,%lu,%.3lf,%.3lf\n", working_set_size * bytes_per_elem, t,
+                       seconds * 1000000, total_bytes, total_flops, total_flops / seconds / 1e9,
+                       total_bytes * 1.0 / seconds / 1024 / 1024 / 1024);
 
 #if FP64
                 cudaMemcpy(&buf[nid], d_buf, n * sizeof(double), cudaMemcpyDeviceToHost);
@@ -355,6 +363,9 @@ int main(int argc, char* argv[]) {
         if (cudaGetLastError() != cudaSuccess) {
             printf("Last cuda error: %s\n", cudaGetErrorString(cudaGetLastError()));
         }
+
+        cudaEventDestroy(start);
+        cudaEventDestroy(stop);
 
         cudaDeviceReset();
     } // parallel region
