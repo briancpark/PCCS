@@ -287,7 +287,7 @@ int main(int argc, char* argv[]) {
         cudaMemset(d_buf, 0, nsize * sizeof(double));
 #endif
 
-        cudaDeviceSynchronize();
+        // cudaDeviceSynchronize();
 
         uint64_t n, nNew;
         uint64_t t;
@@ -345,7 +345,7 @@ int main(int argc, char* argv[]) {
 #else
                 cudaMemcpy(&buf[nid], d_buf, n * sizeof(double), cudaMemcpyDeviceToHost);
 #endif
-                cudaDeviceSynchronize();
+                // cudaDeviceSynchronize();
             } // working set - ntrials
 
             nNew = 1.1 * n;
