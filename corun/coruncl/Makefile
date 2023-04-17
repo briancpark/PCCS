@@ -1,0 +1,1 @@
+gcc main.c -lOpenCL -std=c++11 -o ocl_vector_addition.o
