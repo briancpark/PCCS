@@ -42,6 +42,40 @@ int main(void) {
     cl_int ret = clGetPlatformIDs(1, &platform_id, &ret_num_platforms);
     ret = clGetDeviceIDs(platform_id, CL_DEVICE_TYPE_GPU, 1, &device_id, &ret_num_devices);
 
+    cl_int err = 0;
+    cl_uint num_platforms;
+    cl_platform_id platforms[16]; // Can be on stack!
+    err = clGetPlatformIDs(16, platforms, &num_platforms);
+    // Check err and num_platforms
+    if (err != CL_SUCCESS) {
+        printf("Error: Failed to find an OpenCL platform!\n");
+        printf("Test failed\n");
+        return EXIT_FAILURE;
+    }
+    // print the number of platforms and the platform names
+    printf("Number of platforms: %d\n", num_platforms);
+    for (size_t i = 0; i < num_platforms; i++) {
+        char buffer[10240];
+        printf("Platform %lu: ", i);
+        err = clGetPlatformInfo(platforms[i], CL_PLATFORM_NAME, 10240, buffer, NULL);
+        // Check err
+        printf("%s\n", buffer);
+    }
+
+    // set the device_id to Intel GPU
+    for (size_t i = 0; i < num_platforms; i++) {
+        char buffer[10240];
+        printf("Platform %lu: ", i);
+        err = clGetPlatformInfo(platforms[i], CL_PLATFORM_NAME, 10240, buffer, NULL);
+        // Check err
+        printf("%s\n", buffer);
+        if (strstr(buffer, "Intel(R) OpenCL HD Graphics")) {
+            platform_id = platforms[i];
+            err = clGetDeviceIDs(platform_id, CL_DEVICE_TYPE_GPU, 1, &device_id, &ret_num_devices);
+            break;
+        }
+    }
+
     // Create an OpenCL context
     cl_context context = clCreateContext(NULL, 1, &device_id, NULL, NULL, &ret);
 
