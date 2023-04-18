@@ -110,16 +110,14 @@ void kernel1(__global double* A, const ulong nsize) {
 
 __kernel void ocl_kernel(const ulong nsize, const ulong trials,
 #ifdef FP16
-                         __global half* A,
+                         __global half* A)
 #elif FP32
-                         __global float* A,
+                         __global float* A)
 #else
-                         __global double* A,
+                         __global double* A)
 #endif
-                         __global int* params) {
-    for (ulong j = 0; j < trials; ++j)
+{
+    for (ulong j = 0; j < trials; ++j) {
         kernel1(A, nsize);
-
-    params[0] = sizeof(*A);
-    params[1] = 2;
+    }
 }

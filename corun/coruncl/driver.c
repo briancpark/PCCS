@@ -198,17 +198,41 @@ int main(void) {
 
     cl_mem buf_mem_obj =
         clCreateBuffer(context, CL_MEM_READ_WRITE, nsize * sizeof(double), NULL, &ret);
-
-    ret = clEnqueueWriteBuffer(command_queue, buf_mem_obj, CL_TRUE, 0, nsize * sizeof(double), buf,
-                               0, NULL, NULL);
+    if (ret != CL_SUCCESS) {
+        printf("Error: Failed to allocate device memory!\n");
+        printf("Test failed\n");
+        return EXIT_FAILURE;
+    }
 
     cl_program program = clCreateProgramWithSource(context, 1, (const char**)&source_str,
                                                    (const size_t*)&source_size, &ret);
-
-    ret = clBuildProgram(program, 1, &device_id, NULL, NULL, NULL);
-
+    if (ret != CL_SUCCESS) {
+        printf("Error: Failed to create compute program!\n");
+        printf("Test failed\n");
+        return EXIT_FAILURE;
+    }
+    char build_args[80];
+#ifdef FP16
+#define PRECISION "FP16"
+#elif FP32
+#define PRECISION "FP32"
+#else
+#define PRECISION "FP64"
+#endif
+    sprintf(build_args, "-D%s -DERT_FLOP=%d", PRECISION, ERT_FLOP);
+    ret = clBuildProgram(program, 1, &device_id, build_args, NULL, NULL);
+    if (ret != CL_SUCCESS) {
+        printf("Error: Failed to build program executable!\n");
+        printf("Test failed\n");
+        return EXIT_FAILURE;
+    }
     // Create the OpenCL kernel
     cl_kernel kernel = clCreateKernel(program, KERNEL_FUNC, &ret);
+    if (ret != CL_SUCCESS) {
+        printf("Error: Failed to create compute kernel!\n");
+        printf("Test failed\n");
+        return EXIT_FAILURE;
+    }
 
     uint64_t n, nNew;
     uint64_t t;
@@ -225,22 +249,50 @@ int main(void) {
             struct timeval start, end;
             gettimeofday(&start, NULL);
             // Set the arguments of the kernel
-            // nsize
             ret = clSetKernelArg(kernel, 0, sizeof(uint64_t), (void*)&nsize);
-            // trials
-            ret = clSetKernelArg(kernel, 1, sizeof(uint64_t), (void*)&nsize);
-            // buf
+            if (ret != CL_SUCCESS) {
+                printf("Error: Failed to set kernel arg 0!\n");
+                printf("Test failed\n");
+                return EXIT_FAILURE;
+            }
+            ret = clSetKernelArg(kernel, 1, sizeof(uint64_t), (void*)&ntrials);
+            if (ret != CL_SUCCESS) {
+                printf("Error: Failed to set kernel arg 1!\n");
+                printf("Test failed\n");
+                return EXIT_FAILURE;
+            }
             ret = clSetKernelArg(kernel, 2, sizeof(cl_mem), (void*)&buf_mem_obj);
-            // params
-            ret = clSetKernelArg(kernel, 3, sizeof(double), (void*)&nsize);
+            if (ret != CL_SUCCESS) {
+                printf("Error: Failed to set kernel arg 2!\n");
+                printf("Test failed\n");
+                return EXIT_FAILURE;
+            }
+            // ret = clSetKernelArg(kernel, 3, sizeof(int), (void*)&bytes_per_elem);
+            // if (ret != CL_SUCCESS) {
+            //     printf("Error: Failed to set kernel arg 3!\n");
+            //     printf("Test failed\n");
+            //     return EXIT_FAILURE;
+            // }
+            // ret = clSetKernelArg(kernel, 4, sizeof(int), (void*)&mem_accesses_per_elem);
+            // if (ret != CL_SUCCESS) {
+            //     printf("Error: Failed to set kernel arg 4!\n");
+            //     printf("Test failed\n");
+            //     return EXIT_FAILURE;
+            // }
 
             size_t global_item_size = nsize; // Process the entire lists
             size_t local_item_size = 64;     // Process in groups of 64
+
+            // run the kernel
             ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &global_item_size,
                                          &local_item_size, 0, NULL, NULL);
 
-            ret = clEnqueueReadBuffer(command_queue, buf_mem_obj, CL_TRUE, 0,
-                                      nsize * sizeof(double), buf, 0, NULL, NULL);
+            // read buffer
+            // ret = clEnqueueReadBuffer(command_queue, buf_mem_obj, CL_TRUE, 0,
+            //                           nsize * sizeof(double), buf, 0, NULL, NULL);
+
+            ret = clFinish(command_queue);
+
             gettimeofday(&end, NULL);
             double startTime = start.tv_sec + start.tv_usec / 1000000.0;
             double endTime = end.tv_sec + end.tv_usec / 1000000.0;
@@ -254,7 +306,6 @@ int main(void) {
         }
     }
     ret = clFlush(command_queue);
-    ret = clFinish(command_queue);
     ret = clReleaseKernel(kernel);
     ret = clReleaseProgram(program);
     ret = clReleaseMemObject(buf_mem_obj);
