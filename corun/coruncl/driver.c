@@ -20,6 +20,8 @@
 // Usage:
 // make CFLAGS="-DERT_FLOP=64 -DFP32" && ./clcontention
 
+// To observe the GPU utilization of Intel GPU:
+// sudo intel_gpu_top
 #define REP2(S)                                                                                    \
     S;                                                                                             \
     S
@@ -179,11 +181,10 @@ int main(void) {
     // set the device_id to Intel GPU
     for (size_t i = 0; i < num_platforms; i++) {
         char buffer[10240];
-        printf("Platform %lu: ", i);
         err = clGetPlatformInfo(platforms[i], CL_PLATFORM_NAME, 10240, buffer, NULL);
         // Check err
-        printf("%s\n", buffer);
         if (strstr(buffer, "Intel(R) OpenCL HD Graphics")) {
+            printf("Using the backend: %s\n", buffer);
             platform_id = platforms[i];
             err = clGetDeviceIDs(platform_id, CL_DEVICE_TYPE_GPU, 1, &device_id, &ret_num_devices);
             break;
@@ -246,8 +247,7 @@ int main(void) {
             ntrials = 1;
         // 600 original
         for (t = 1; t <= 600; t = t + 1) { // working set - ntrials
-            struct timeval start, end;
-            gettimeofday(&start, NULL);
+
             // Set the arguments of the kernel
             ret = clSetKernelArg(kernel, 0, sizeof(uint64_t), (void*)&nsize);
             if (ret != CL_SUCCESS) {
@@ -283,6 +283,8 @@ int main(void) {
             size_t global_item_size = nsize; // Process the entire lists
             size_t local_item_size = 64;     // Process in groups of 64
 
+            struct timeval start, end;
+            gettimeofday(&start, NULL);
             // run the kernel
             ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &global_item_size,
                                          &local_item_size, 0, NULL, NULL);
