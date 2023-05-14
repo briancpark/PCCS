@@ -116,6 +116,7 @@ __kernel void ocl_kernel(const ulong nsize, const ulong trials,
 #else
                          __global double* A)
 #endif
+
 {
     for (ulong j = 0; j < trials; ++j) {
         kernel1(A, nsize);

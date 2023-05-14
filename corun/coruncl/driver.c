@@ -98,7 +98,7 @@ int main(void) {
 
     nthreads = 1;
 
-    int num_gpus = 0;
+    int num_gpus = 1;
     int gpu;
     int gpu_id;
     int numSMs;
@@ -191,14 +191,35 @@ int main(void) {
         }
     }
 
+    uint64_t n, nNew;
+    uint64_t t;
+    int bytes_per_elem;
+    int mem_accesses_per_elem;
+
     // Create an OpenCL context
     cl_context context = clCreateContext(NULL, 1, &device_id, NULL, NULL, &ret);
 
     // Create a command queue
     cl_command_queue command_queue = clCreateCommandQueue(context, device_id, 0, &ret);
 
+#if FP64
     cl_mem buf_mem_obj =
         clCreateBuffer(context, CL_MEM_READ_WRITE, nsize * sizeof(double), NULL, &ret);
+    bytes_per_elem = 8;
+#elif FP32
+    cl_mem buf_mem_obj =
+        clCreateBuffer(context, CL_MEM_READ_WRITE, nsize * sizeof(float), NULL, &ret);
+    bytes_per_elem = 4;
+#elif FP16
+    cl_mem buf_mem_obj =
+        clCreateBuffer(context, CL_MEM_READ_WRITE, nsize * sizeof(__half), NULL, &ret);
+    bytes_per_elem = 2;
+#else
+    cl_mem buf_mem_obj =
+        clCreateBuffer(context, CL_MEM_READ_WRITE, nsize * sizeof(double), NULL, &ret);
+    bytes_per_elem = 8;
+#endif
+
     if (ret != CL_SUCCESS) {
         printf("Error: Failed to allocate device memory!\n");
         printf("Test failed\n");
@@ -235,11 +256,6 @@ int main(void) {
         return EXIT_FAILURE;
     }
 
-    uint64_t n, nNew;
-    uint64_t t;
-    int bytes_per_elem;
-    int mem_accesses_per_elem;
-
     n = 1 << 22;
     while (n <= nsize) { // working set - nsize
         uint64_t ntrials = nsize / n;
@@ -267,18 +283,8 @@ int main(void) {
                 printf("Test failed\n");
                 return EXIT_FAILURE;
             }
-            // ret = clSetKernelArg(kernel, 3, sizeof(int), (void*)&bytes_per_elem);
-            // if (ret != CL_SUCCESS) {
-            //     printf("Error: Failed to set kernel arg 3!\n");
-            //     printf("Test failed\n");
-            //     return EXIT_FAILURE;
-            // }
-            // ret = clSetKernelArg(kernel, 4, sizeof(int), (void*)&mem_accesses_per_elem);
-            // if (ret != CL_SUCCESS) {
-            //     printf("Error: Failed to set kernel arg 4!\n");
-            //     printf("Test failed\n");
-            //     return EXIT_FAILURE;
-            // }
+
+            mem_accesses_per_elem = 2;
 
             size_t global_item_size = nsize; // Process the entire lists
             size_t local_item_size = 64;     // Process in groups of 64
