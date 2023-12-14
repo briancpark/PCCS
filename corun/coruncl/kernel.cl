@@ -32,11 +32,11 @@
 #define KERNEL2(a, b, c) ((a) = (a) * (b) + (c))
 
 #ifdef FP16
-void kernel1(__global half* A, const ulong nsize) {
+void kernel1(__global half* A, const ulong nsize, const ulong ntrials) {
 #elif FP32
-void kernel1(__global float* A, const ulong nsize) {
+void kernel1(__global float* A, const ulong nsize, const ulong ntrials) {
 #else
-void kernel1(__global double* A, const ulong nsize) {
+void kernel1(__global double* A, const ulong nsize, const ulong ntrials) {
 #endif
 
     size_t total_thr = get_num_groups(0) * get_local_size(0);
@@ -68,43 +68,47 @@ void kernel1(__global double* A, const ulong nsize) {
     double beta = 1.0;
 #endif
     size_t i, j;
-    for (i = start_idx; i < end_idx; i += stride_idx) {
-        beta = 1.0;
+    for (uint j = 0; j < ntrials; ++j) {
+        for (uint i = start_idx; i < end_idx; i += stride_idx) {
+
 #if (ERT_FLOP & 1) == 1 /* add 1 flop */
-        KERNEL1(beta, A[i], alpha);
+            KERNEL1(beta, A[i], alpha);
 #endif
 #if (ERT_FLOP & 2) == 2 /* add 2 flops */
-        KERNEL2(beta, A[i], alpha);
+            KERNEL2(beta, A[i], alpha);
 #endif
 #if (ERT_FLOP & 4) == 4 /* add 4 flops */
-        REP2(KERNEL2(beta, A[i], alpha));
+            REP2(KERNEL2(beta, A[i], alpha));
 #endif
 #if (ERT_FLOP & 8) == 8 /* add 8 flops */
-        REP4(KERNEL2(beta, A[i], alpha));
+            REP4(KERNEL2(beta, A[i], alpha));
 #endif
 #if (ERT_FLOP & 16) == 16 /* add 16 flops */
-        REP8(KERNEL2(beta, A[i], alpha));
+            REP8(KERNEL2(beta, A[i], alpha));
 #endif
 #if (ERT_FLOP & 32) == 32 /* add 32 flops */
-        REP16(KERNEL2(beta, A[i], alpha));
+            REP16(KERNEL2(beta, A[i], alpha));
 #endif
 #if (ERT_FLOP & 64) == 64 /* add 64 flops */
-        REP32(KERNEL2(beta, A[i], alpha));
+            REP32(KERNEL2(beta, A[i], alpha));
 #endif
 #if (ERT_FLOP & 128) == 128 /* add 128 flops */
-        REP64(KERNEL2(beta, A[i], alpha));
+            REP64(KERNEL2(beta, A[i], alpha));
 #endif
 #if (ERT_FLOP & 256) == 256 /* add 256 flops */
-        REP128(KERNEL2(beta, A[i], alpha));
+            REP128(KERNEL2(beta, A[i], alpha));
 #endif
 #if (ERT_FLOP & 512) == 512 /* add 512 flops */
-        REP256(KERNEL2(beta, A[i], alpha));
+            REP256(KERNEL2(beta, A[i], alpha));
 #endif
 #if (ERT_FLOP & 1024) == 1024 /* add 1024 flops */
-        REP512(KERNEL2(beta, A[i], alpha));
+            REP512(KERNEL2(beta, A[i], alpha));
 #endif
 
-        A[i] = -beta;
+            A[i] = beta;
+        }
+
+        alpha = alpha * (1 - 1e-8);
     }
 }
 
@@ -118,7 +122,5 @@ __kernel void ocl_kernel(const ulong nsize, const ulong trials,
 #endif
 
 {
-    for (ulong j = 0; j < trials; ++j) {
-        kernel1(A, nsize);
-    }
+    kernel1(A, nsize, trials);
 }

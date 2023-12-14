@@ -88,9 +88,6 @@ int main(void) {
     double* buf = (double*)malloc(PSIZE);
 #endif
 
-    printf("nsize,trials,microseconds,bytes,single_thread_bandwidth,total_bandwidth,GFLOPS,"
-           "bandwidth(GB/s)\n");
-
     if (buf == NULL) {
         fprintf(stderr, "Out of memory!\n");
         return -1;
@@ -198,6 +195,11 @@ int main(void) {
 
     // Create an OpenCL context
     cl_context context = clCreateContext(NULL, 1, &device_id, NULL, NULL, &ret);
+    if (context == NULL) {
+        printf("Error: Failed to create a compute context!\n");
+        printf("Test failed\n");
+        return EXIT_FAILURE;
+    }
 
     // Create a command queue
     cl_command_queue command_queue = clCreateCommandQueue(context, device_id, 0, &ret);
@@ -256,6 +258,9 @@ int main(void) {
         return EXIT_FAILURE;
     }
 
+    printf("nsize,trials,microseconds,bytes,single_thread_bandwidth,total_bandwidth,GFLOPS,"
+           "bandwidth(GB/s)\n");
+
     n = 1 << 22;
     while (n <= nsize) { // working set - nsize
         uint64_t ntrials = nsize / n;
@@ -306,8 +311,8 @@ int main(void) {
             double endTime = end.tv_sec + end.tv_usec / 1000000.0;
             double seconds = (double)(endTime - startTime);
             uint64_t working_set_size = n * nthreads * nprocs;
-            uint64_t total_bytes = t * working_set_size * bytes_per_elem * mem_accesses_per_elem;
-            uint64_t total_flops = t * working_set_size * ERT_FLOP;
+            uint64_t total_bytes = working_set_size * bytes_per_elem * mem_accesses_per_elem;
+            uint64_t total_flops = working_set_size * ERT_FLOP;
             printf("%lu,%lu,%.3lf,%lu,%lu,%.3lf,%.3lf\n", working_set_size * bytes_per_elem, t,
                    seconds * 1000000, total_bytes, total_flops, total_flops / seconds / 1e9,
                    total_bytes * 1.0 / seconds / 1024 / 1024 / 1024);
